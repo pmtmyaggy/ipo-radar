@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # 主应用 - 仪表盘
+  dashboard:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - ENV=production
+      - DATABASE_URL=sqlite:///data/ipo_radar.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 定时任务调度器
+  scheduler:
+    build: .
+    command: python -m src.scheduler
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    environment:
+      - ENV=production
+      - DATABASE_URL=sqlite:///data/ipo_radar.db
+    restart: unless-stopped
+    depends_on:
+      - dashboard
+
+  # Ollama - 本地LLM（可选）
+  # ollama:
+  #   image: ollama/ollama
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   ports:
+  #     - "11434:11434"
+  #   restart: unless-stopped
+
+volumes:
+  ollama_data:

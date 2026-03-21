@@ -1,0 +1,44 @@
+# Core
+requests>=2.31.0
+httpx[http2]>=0.27.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+feedparser>=6.0.0
+
+# Data
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+
+# Financial Data
+yfinance>=0.2.35
+sec-api>=1.0.0
+
+# Dashboard
+streamlit>=1.30.0
+plotly>=5.18.0
+
+# AI/NLP
+langchain>=0.1.0
+litellm>=1.0.0
+
+# Utils
+schedule>=1.2.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dateutil>=2.8.0
+cachetools>=5.3.0
+loguru>=0.7.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+memory-profiler>=0.61.0
+black>=23.0.0
+ruff>=0.1.0
+mypy>=1.7.0
