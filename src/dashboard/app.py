@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # 添加项目路径
-sys.path.insert(0, '/Users/zhiyuchen/Downloads/美股爬虫/ipo-radar/src')
+sys.path.insert(0, '/Users/zhiyuchen/Downloads/美股爬虫/ipo-radar')
 
 from src.scorer.composite import SignalAggregator
 from src.scorer.daily_scan import DailyScanner
