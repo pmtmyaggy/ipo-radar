@@ -149,6 +149,29 @@ class FundamentalScreener:
                         market_cap=None,
                     )
         
+        # 对于已上市股票，尝试从 Yahoo Finance 获取基本信息
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            if info:
+                # 从 Yahoo Finance 获取可用数据
+                market_cap = info.get('marketCap')
+                revenue_growth = info.get('revenueGrowth')
+                gross_margin = info.get('grossMargins')
+                
+                return S1Metrics(
+                    revenue_growth=Decimal(str(revenue_growth)) if revenue_growth else None,
+                    gross_margin=Decimal(str(gross_margin)) if gross_margin else None,
+                    cash_runway_months=None,  # 无法直接获取
+                    debt_to_assets=None,  # 无法直接获取
+                    lead_underwriter=None,
+                    market_cap=Decimal(str(market_cap)) if market_cap else None,
+                )
+        except Exception as e:
+            logger.debug(f"Failed to get fundamentals from Yahoo Finance for {ticker}: {e}")
+        
         return None
     
     def _calculate_cash_runway(self, s1_filing) -> Optional[Decimal]:
