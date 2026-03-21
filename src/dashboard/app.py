@@ -492,7 +492,7 @@ def render_calendar():
         
         try:
             lockup_tracker = get_aggregator().lockup
-            expiries = lockup_tracker.get_upcoming_expiries(days=30)
+            expiries = lockup_tracker.get_upcoming_expiries(days_ahead=30)
             
             if expiries:
                 df = pd.DataFrame([
@@ -520,7 +520,7 @@ def render_calendar():
             tickers = radar.get_active_tickers()
             
             earnings_tracker = get_aggregator().earnings
-            upcoming = earnings_tracker.get_upcoming_earnings(tickers, days=30)
+            upcoming = earnings_tracker.get_upcoming_earnings(tickers, days_ahead=30)
             
             if upcoming:
                 df = pd.DataFrame(upcoming)
