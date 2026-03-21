@@ -108,7 +108,17 @@ Rules:
                 max_tokens=200,
             )
             
-            content = response.choices[0].message.content.strip()
+            # 处理不同的响应格式
+            if hasattr(response, 'choices') and response.choices:
+                content = response.choices[0].message.content.strip()
+            elif isinstance(response, dict):
+                content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            elif isinstance(response, str):
+                content = response.strip()
+            else:
+                content = str(response)
+            
+            logger.debug(f"LLM raw response: {content[:200]}")
             
             # 提取 JSON
             if "```json" in content:
@@ -126,7 +136,7 @@ Rules:
             }
             
         except Exception as e:
-            logger.error(f"LLM analysis failed: {e}")
+            logger.error(f"LLM analysis failed: {e}, response type: {type(response)}")
             return {"sentiment": "neutral", "score": 0.0, "reasoning": f"Error: {str(e)[:50]}"}
 
 
