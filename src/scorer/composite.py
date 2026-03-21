@@ -154,7 +154,7 @@ class SignalAggregator:
     def _get_ipo_info(self, ticker: str) -> Optional[dict]:
         """获取IPO信息."""
         try:
-            # 从radar获取
+            # 1. 先从radar获取
             watchlist = self.radar.get_watchlist()
             for status in watchlist:
                 if status.ticker == ticker:
@@ -164,6 +164,37 @@ class SignalAggregator:
                         "ipo_date": status.ipo_date,
                         "ipo_price": None,  # 需要从数据库获取
                     }
+            
+            # 2. 从数据库获取
+            try:
+                import sqlite3
+                conn = sqlite3.connect('data/ipo_radar.db')
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT ticker, company_name, expected_date, final_price FROM ipo_events WHERE ticker = ?',
+                    (ticker,)
+                )
+                row = cursor.fetchone()
+                conn.close()
+                
+                if row:
+                    from datetime import datetime
+                    ipo_date = None
+                    if row[2]:
+                        try:
+                            ipo_date = datetime.strptime(row[2], '%Y-%m-%d').date()
+                        except:
+                            ipo_date = row[2]
+                    
+                    return {
+                        "ticker": row[0],
+                        "company_name": row[1],
+                        "ipo_date": ipo_date,
+                        "ipo_price": float(row[3]) if row[3] else None,
+                    }
+            except Exception as db_err:
+                logger.warning(f"Failed to get IPO info from database: {db_err}")
+            
             return None
         except Exception:
             return None
