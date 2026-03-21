@@ -112,6 +112,7 @@ class BaseCrawler(ABC):
         headers: Optional[dict] = None,
         use_rate_limit: bool = True,
         use_retry: bool = True,
+        user_agent_type: str = "standard",
         **kwargs
     ) -> requests.Response:
         """发送HTTP请求.
@@ -124,6 +125,7 @@ class BaseCrawler(ABC):
             headers: 自定义请求头
             use_rate_limit: 是否使用频率限制，默认True
             use_retry: 是否使用重试，默认True
+            user_agent_type: User-Agent类型 (standard/browser/edgar)
             **kwargs: 传递给requests的其他参数
         
         Returns:
@@ -133,8 +135,8 @@ class BaseCrawler(ABC):
         if use_rate_limit:
             self._rate_limiter.acquire()
         
-        # 准备请求头
-        request_headers = self._user_agent.get_headers()
+        # 准备请求头（使用指定的User-Agent类型）
+        request_headers = self._user_agent.get_headers(user_agent_type=user_agent_type)
         if headers:
             request_headers.update(headers)
         
@@ -146,12 +148,15 @@ class BaseCrawler(ABC):
                 url, method, request_headers, **kwargs
             )
         else:
+            # 过滤掉非 requests 参数
+            request_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ("timeout", "user_agent_type")}
             response = requests.request(
                 method=method,
                 url=url,
                 headers=request_headers,
                 timeout=kwargs.get("timeout", 30),
-                **{k: v for k, v in kwargs.items() if k != "timeout"}
+                **request_kwargs
             )
         
         # 记录请求日志
@@ -177,12 +182,15 @@ class BaseCrawler(ABC):
         **kwargs
     ) -> requests.Response:
         """带重试的请求方法."""
+        # 过滤掉非 requests 参数
+        request_kwargs = {k: v for k, v in kwargs.items() 
+                         if k not in ("timeout", "user_agent_type")}
         return requests.request(
             method=method,
             url=url,
             headers=headers,
             timeout=kwargs.get("timeout", 30),
-            **{k: v for k, v in kwargs.items() if k != "timeout"}
+            **request_kwargs
         )
     
     def _parse_html(self, html: str, parser: str = "lxml") -> BeautifulSoup:
