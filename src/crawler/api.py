@@ -5,6 +5,7 @@
 
 import logging
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 from .models.database import DatabaseManager
@@ -339,7 +340,7 @@ class CrawlerAPI:
     def get_lockup_info(self, ticker: str, ipo_date: Optional[date] = None) -> Optional[LockupInfo]:
         """获取禁售期信息.
         
-        优先从S-1解析结果获取。
+        优先从数据库获取，如果没有则根据IPO日期估算（默认180天）。
         
         Args:
             ticker: 股票代码
@@ -348,8 +349,98 @@ class CrawlerAPI:
         Returns:
             LockupInfo或None
         """
-        # TODO: 从S-1解析结果或数据库获取
-        return None
+        try:
+            # 1. 尝试从数据库获取
+            import sqlite3
+            conn = sqlite3.connect('data/ipo_radar.db')
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                'SELECT ticker, lockup_expiry_date, supply_impact_pct FROM lockup_info WHERE ticker = ?',
+                (ticker,)
+            )
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                from src.crawler.models.schemas import LockupInfo
+                from datetime import datetime
+                expiry_date = None
+                if row[1]:
+                    try:
+                        expiry_date = datetime.strptime(row[1], '%Y-%m-%d').date()
+                    except:
+                        pass
+                
+                # 需要从数据库获取更多字段
+                conn2 = sqlite3.connect('data/ipo_radar.db')
+                cursor2 = conn2.cursor()
+                cursor2.execute(
+                    'SELECT ipo_date, lockup_days FROM lockup_info WHERE ticker = ?',
+                    (ticker,)
+                )
+                row2 = cursor2.fetchone()
+                conn2.close()
+                
+                ipo_date = None
+                lockup_days = 180
+                if row2:
+                    if row2[0]:
+                        try:
+                            ipo_date = datetime.strptime(row2[0], '%Y-%m-%d').date()
+                        except:
+                            pass
+                    if row2[1]:
+                        lockup_days = row2[1]
+                
+                return LockupInfo(
+                    ticker=row[0],
+                    ipo_date=ipo_date or expiry_date,  # 如果缺少ipo_date，用expiry_date代替
+                    lockup_days=lockup_days,
+                    lockup_expiry_date=expiry_date,
+                    supply_impact_pct=Decimal(str(row[2])) if row[2] else Decimal("0.20"),
+                )
+            
+            # 2. 尝试从IPO日期估算（默认180天锁定期）
+            if ipo_date is None:
+                # 从数据库获取IPO日期
+                conn = sqlite3.connect('data/ipo_radar.db')
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT expected_date FROM ipo_events WHERE ticker = ?',
+                    (ticker,)
+                )
+                row = cursor.fetchone()
+                conn.close()
+                
+                if row and row[0]:
+                    from datetime import datetime
+                    try:
+                        ipo_date = datetime.strptime(row[0], '%Y-%m-%d').date()
+                    except:
+                        pass
+            
+            if ipo_date:
+                from src.crawler.models.schemas import LockupInfo
+                from datetime import timedelta
+                
+                # 默认180天锁定期
+                lockup_days = 180
+                lockup_date = ipo_date + timedelta(days=lockup_days)
+                
+                return LockupInfo(
+                    ticker=ticker,
+                    ipo_date=ipo_date,
+                    lockup_days=lockup_days,
+                    lockup_expiry_date=lockup_date,
+                    supply_impact_pct=Decimal("0.20"),  # 默认20%
+                )
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to get lockup info for {ticker}: {e}")
+            return None
     
     def get_upcoming_lockup_expiries(
         self,

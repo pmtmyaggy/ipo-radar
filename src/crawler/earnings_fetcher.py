@@ -61,21 +61,25 @@ class EarningsCrawler(BaseCrawler):
         """获取下次财报日期."""
         try:
             yf_ticker = yf.Ticker(ticker)
-            calendar = yf_ticker.calendar
             
-            if calendar is not None and not calendar.empty:
-                # 尝试获取Earnings Date
-                if "Earnings Date" in calendar.index:
-                    earnings_date = calendar.loc["Earnings Date"].iloc[0]
-                    if isinstance(earnings_date, datetime):
-                        return earnings_date.date()
-            
-            # 备用：从info中获取
+            # 优先从info中获取（更可靠）
             info = yf_ticker.info
-            if "earningsDate" in info:
+            if info and "earningsDate" in info:
                 timestamp = info["earningsDate"]
                 if timestamp:
                     return datetime.fromtimestamp(timestamp).date()
+            
+            # 备用：从calendar获取
+            try:
+                calendar = yf_ticker.calendar
+                if calendar is not None and hasattr(calendar, 'empty') and not calendar.empty:
+                    # 尝试获取Earnings Date
+                    if "Earnings Date" in calendar.index:
+                        earnings_date = calendar.loc["Earnings Date"].iloc[0]
+                        if isinstance(earnings_date, datetime):
+                            return earnings_date.date()
+            except Exception:
+                pass  # calendar 可能不可用
             
             return None
             
@@ -126,13 +130,30 @@ class EarningsCrawler(BaseCrawler):
     ) -> Optional[EarningsReport]:
         """解析财报数据."""
         try:
-            # 简化实现
+            # 获取下次财报日期
+            report_date = self.get_next_earnings_date(ticker)
+            
+            # 尝试从 earnings DataFrame 获取最新数据
+            revenue = Decimal("0")
+            eps = Decimal("0")
+            
+            if earnings is not None and hasattr(earnings, 'index') and len(earnings) > 0:
+                try:
+                    # 获取最新一期
+                    latest = earnings.iloc[-1]
+                    if 'Revenue' in earnings.columns:
+                        revenue = Decimal(str(latest['Revenue']))
+                    if 'Earnings' in earnings.columns:
+                        eps = Decimal(str(latest['Earnings']))
+                except Exception:
+                    pass
+            
             report = EarningsReport(
                 ticker=ticker,
-                report_date=date.today(),
-                fiscal_quarter="Q1 2024",
-                revenue=Decimal("0"),
-                eps=Decimal("0"),
+                report_date=report_date or date.today(),
+                fiscal_quarter="",  # 简化
+                revenue=revenue,
+                eps=eps,
             )
             
             return report
