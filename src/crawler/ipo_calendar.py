@@ -50,23 +50,33 @@ class NasdaqIPOCalendarCrawler(BaseCrawler):
         Returns:
             IPOEvent列表
         """
-        events = []
-        
         try:
-            # 获取即将上市的IPO
-            if kwargs.get("upcoming", True):
-                upcoming = self._fetch_upcoming()
-                events.extend(upcoming)
+            # Nasdaq API 返回所有数据，不需要分类型请求
+            response = self._request(
+                self.BASE_URL,
+                user_agent_type="browser",
+            )
+            response.raise_for_status()
             
-            # 获取已定价的IPO
-            if kwargs.get("priced", True):
-                priced = self._fetch_priced()
-                events.extend(priced)
+            data = response.json()
+            all_events = self._parse_response(data, IPOStatus.FILED)
             
-            # 获取已提交的IPO
-            if kwargs.get("filed", False):
-                filed = self._fetch_filed()
-                events.extend(filed)
+            # 根据 kwargs 过滤
+            events = []
+            want_upcoming = kwargs.get("upcoming", True)
+            want_priced = kwargs.get("priced", True)
+            want_filed = kwargs.get("filed", False)
+            
+            for event in all_events:
+                # 根据事件状态过滤
+                if event.status == IPOStatus.FILED and want_upcoming:
+                    events.append(event)
+                elif event.status == IPOStatus.PRICED and want_priced:
+                    events.append(event)
+                elif event.status == IPOStatus.TRADING and want_priced:
+                    events.append(event)
+                elif event.status == IPOStatus.FILED and want_filed:
+                    events.append(event)
             
             logger.info(f"Fetched {len(events)} IPO events from Nasdaq")
             return events
@@ -158,18 +168,27 @@ class NasdaqIPOCalendarCrawler(BaseCrawler):
                 logger.warning("No 'data' field in Nasdaq response")
                 return []
             
-            # 获取第一个非空的数据类型
-            ipo_data = None
+            # 处理不同类型的数据结构
+            # upcoming: {'upcomingTable': {'rows': [...]}}
+            # priced/filed: {'rows': [...]}
+            rows = []
+            
             for key in ["upcoming", "priced", "filed"]:
                 if key in data["data"] and data["data"][key]:
                     ipo_data = data["data"][key]
-                    break
+                    
+                    # upcoming 有嵌套结构
+                    if key == "upcoming" and "upcomingTable" in ipo_data:
+                        table_rows = ipo_data["upcomingTable"].get("rows", [])
+                        rows.extend(table_rows)
+                    else:
+                        # priced/filed 直接有 rows
+                        table_rows = ipo_data.get("rows", [])
+                        rows.extend(table_rows)
             
-            if not ipo_data:
-                logger.warning("No IPO data found in Nasdaq response")
+            if not rows:
+                logger.warning("No IPO rows found in Nasdaq response")
                 return []
-            
-            rows = ipo_data.get("rows", [])
             
             for row in rows:
                 try:
@@ -180,6 +199,7 @@ class NasdaqIPOCalendarCrawler(BaseCrawler):
                     logger.warning(f"Failed to parse row: {row}, error: {e}")
                     continue
             
+            logger.info(f"Parsed {len(events)} IPO events from Nasdaq")
             return events
             
         except Exception as e:
@@ -210,7 +230,7 @@ class NasdaqIPOCalendarCrawler(BaseCrawler):
             
             # 提取预计上市日期
             expected_date = None
-            date_str = row.get("expectedPricedDate") or row.get("pricedDate")
+            date_str = row.get("expectedPriceDate") or row.get("expectedPricedDate") or row.get("pricedDate")
             if date_str:
                 try:
                     # 尝试多种日期格式
@@ -437,9 +457,10 @@ class IPOCalendarAggregator:
         Returns:
             过滤后的IPOEvent列表
         """
-        events = self.fetch_all(upcoming=True, priced=False, filed=False)
+        # 获取所有数据，然后过滤即将上市的
+        events = self.fetch_all(upcoming=True, priced=True, filed=True)
         
-        # 过滤日期
+        # 过滤日期 - 即将上市的是未来日期的
         today = date.today()
         cutoff = today + timedelta(days=days)
         
