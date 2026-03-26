@@ -96,17 +96,52 @@ class CrawlerAPI:
         events = self._ipo_calendar.fetch_all()
         
         count = 0
-        if self.db_manager:
-            from .models.database import IPOEventModel
+        # 使用直接SQLite插入
+        try:
+            import sqlite3
+            from datetime import datetime
             
-            with self.db_manager.session_scope() as session:
-                for event in events:
-                    try:
-                        db_event = IPOEventModel(**event.model_dump())
-                        session.merge(db_event)
-                        count += 1
-                    except Exception as e:
-                        self.logger.warning(f"Failed to save IPO event: {e}")
+            conn = sqlite3.connect('data/ipo_radar.db')
+            cursor = conn.cursor()
+            
+            for event in events:
+                try:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO ipo_events 
+                        (ticker, company_name, cik, exchange, expected_date, 
+                         price_range_low, price_range_high, final_price, shares_offered,
+                         deal_size_mm, lead_underwriter, s1_filing_url, prospectus_url,
+                         status, sector, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        event.ticker,
+                        event.company_name,
+                        event.cik,
+                        event.exchange,
+                        event.expected_date.isoformat() if event.expected_date else None,
+                        event.price_range_low,
+                        event.price_range_high,
+                        event.final_price,
+                        event.shares_offered,
+                        event.deal_size_mm,
+                        event.lead_underwriter,
+                        event.s1_filing_url,
+                        event.prospectus_url,
+                        event.status.value if hasattr(event.status, 'value') else str(event.status),
+                        event.sector,
+                        datetime.now().isoformat(),
+                        datetime.now().isoformat()
+                    ))
+                    count += 1
+                except Exception as e:
+                    self.logger.warning(f"Failed to save IPO event {event.ticker}: {e}")
+            
+            conn.commit()
+            conn.close()
+            self.logger.info(f"Saved {count} IPO events to database")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to save IPO events: {e}")
         
         return count
     

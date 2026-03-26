@@ -42,6 +42,13 @@ class HoldingsFetcher(BaseCrawler):
             db_manager=db_manager,
         )
         self.logger = logging.getLogger(__name__)
+        
+        # 初始化requests session
+        self.session = requests.Session()
+        # 设置User-Agent
+        from src.crawler.utils.user_agent import UserAgentManager
+        ua = UserAgentManager()
+        self.session.headers.update(ua.get_headers(user_agent_type="edgar"))
     
     def fetch(self, **kwargs) -> List[InstitutionalHolding]:
         """获取机构持仓数据.
