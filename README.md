@@ -138,13 +138,13 @@ streamlit run src/dashboard/app.py
 make scan
 
 # 或
-python -m src.scorer --scan
+python -m src --scan
 ```
 
 ### 分析单个股票
 
 ```bash
-python -m src.scorer --ticker CAVA
+python -m src --ticker CAVA
 ```
 
 ---

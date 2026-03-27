@@ -117,7 +117,7 @@ class TestEndToEndWorkflow:
             
             # 创建扫描器并运行
             scanner = DailyScanner(aggregator=mock_agg_instance, radar=mock_radar_instance)
-            result = scanner.run_scan()
+            result = scanner.run_scan(mode="watchlist")
             
             # 验证结果
             assert result.total_count == 3

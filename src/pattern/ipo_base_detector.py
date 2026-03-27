@@ -6,7 +6,8 @@
 import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Optional
+from decimal import Decimal
+from typing import Any, Optional
 
 import pandas as pd
 import numpy as np
@@ -43,9 +44,15 @@ class IPOBaseDetector:
     MIN_DEPTH_PCT = 0.10  # 最小回撤10%
     MAX_DEPTH_PCT = 0.50  # 最大回撤50%
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化检测器."""
         self.logger = logging.getLogger(__name__)
+
+    def _to_float(self, value: Any) -> float:
+        """将 Decimal / numpy 标量等安全转换为 float."""
+        if isinstance(value, Decimal):
+            return float(value)
+        return float(value)
     
     def detect(self, df: pd.DataFrame, ipo_date: date) -> IPOBase:
         """检测IPO后的底部形态.
@@ -73,6 +80,11 @@ class IPOBaseDetector:
         df = df.copy()
         if not pd.api.types.is_datetime64_any_dtype(df['date']):
             df['date'] = pd.to_datetime(df['date'])
+
+        # 技术分析统一使用 float，避免 Decimal 与 numpy/pandas 混算报错
+        for column in ["open", "high", "low", "close", "volume"]:
+            if column in df.columns:
+                df[column] = df[column].map(self._to_float)
         
         # 过滤IPO后的数据
         df = df[df['date'] >= pd.Timestamp(ipo_date)]
@@ -84,7 +96,7 @@ class IPOBaseDetector:
             # 找到左侧高点
             left_high_idx, left_high_price = self._find_left_high(df)
             
-            if left_high_idx is None or left_high_idx < 5:
+            if left_high_idx is None or left_high_price is None or left_high_idx < 5:
                 return IPOBase(ticker=ticker, has_base=False, base_type="unknown")
             
             # 获取底部区域数据（左侧高点之后）
@@ -94,7 +106,7 @@ class IPOBaseDetector:
                 return IPOBase(ticker=ticker, has_base=False, base_type="unknown")
             
             # 计算底部深度
-            base_low = base_df['low'].min()
+            base_low = self._to_float(base_df['low'].min())
             base_depth = (left_high_price - base_low) / left_high_price
             
             # 检查深度是否在范围内
@@ -133,7 +145,7 @@ class IPOBaseDetector:
             self.logger.error(f"Error detecting base for {ticker}: {e}")
             return IPOBase(ticker=ticker, has_base=False, base_type="unknown")
     
-    def _find_left_high(self, df: pd.DataFrame) -> tuple:
+    def _find_left_high(self, df: pd.DataFrame) -> tuple[int | None, float | None]:
         """找到左侧高点（IPO后的第一个显著高点）.
         
         策略：找到前N天内的最高点，且该高点比IPO开盘价高至少10%
@@ -141,14 +153,14 @@ class IPOBaseDetector:
         if len(df) < 10:
             return None, None
         
-        ipo_price = df['open'].iloc[0]
+        ipo_price = self._to_float(df['open'].iloc[0])
         
         # 在前30天内找最高点
         lookback = min(30, len(df))
         early_data = df.iloc[:lookback]
         
         high_idx = early_data['high'].idxmax()
-        high_price = early_data.loc[high_idx, 'high']
+        high_price = self._to_float(early_data.loc[high_idx, 'high'])
         
         # 确保比IPO价高10%以上
         if high_price >= ipo_price * 1.10:
@@ -176,7 +188,7 @@ class IPOBaseDetector:
             first_half = base_df.iloc[:len(base_df)//2]
             second_half = base_df.iloc[len(base_df)//2:]
             
-            if second_half['close'].mean() > first_half['close'].mean():
+            if self._to_float(second_half['close'].mean()) > self._to_float(first_half['close'].mean()):
                 return "cup"
         
         # 上升三角形：低点抬高，高点平稳
@@ -208,15 +220,15 @@ class IPOBaseDetector:
         
         try:
             # 计算整个底部的平均波动
-            full_range = (base_df['high'] - base_df['low']).mean()
+            full_range = self._to_float((base_df['high'] - base_df['low']).mean())
             
             # 计算末期5天的平均波动
             last_5 = base_df.tail(5)
-            last_range = (last_5['high'] - last_5['low']).mean()
+            last_range = self._to_float((last_5['high'] - last_5['low']).mean())
             
             if full_range > 0:
                 tightness = 1 - (last_range / full_range)
-                return max(0, min(1, tightness))  # 限制在0-1范围内
+                return float(max(0, min(1, tightness)))  # 限制在0-1范围内
             
             return None
             
@@ -234,14 +246,14 @@ class IPOBaseDetector:
         """
         try:
             # IPO初期成交量（前10天）
-            ipo_volume = full_df.head(10)['volume'].mean()
+            ipo_volume = self._to_float(full_df.head(10)['volume'].mean())
             
             # 底部期间成交量
-            base_volume = base_df['volume'].mean()
+            base_volume = self._to_float(base_df['volume'].mean())
             
             if ipo_volume > 0:
                 ratio = base_volume / ipo_volume
-                return ratio < 0.7  # 萎缩30%以上
+                return bool(ratio < 0.7)  # 萎缩30%以上
             
             return False
             

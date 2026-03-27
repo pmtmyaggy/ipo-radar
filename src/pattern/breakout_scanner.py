@@ -6,7 +6,8 @@
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
+from decimal import Decimal
+from typing import Any, Optional
 
 import pandas as pd
 import numpy as np
@@ -42,9 +43,15 @@ class BreakoutScanner:
     RSI_MIN = 50  # RSI最小值
     RSI_MAX = 70  # RSI最大值（不超买）
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化扫描器."""
         self.logger = logging.getLogger(__name__)
+
+    def _to_float(self, value: Any) -> float:
+        """将 Decimal / numpy 标量等安全转换为 float."""
+        if isinstance(value, Decimal):
+            return float(value)
+        return float(value)
     
     def scan(self, df: pd.DataFrame, base_info: IPOBase) -> BreakoutSignal:
         """检测突破信号.
@@ -96,13 +103,13 @@ class BreakoutScanner:
             # 获取突破日数据
             breakout_row = df.iloc[breakout_idx]
             breakout_date = breakout_row['date']
-            breakout_price = breakout_row['close']
+            breakout_price = self._to_float(breakout_row['close'])
             
             # 检查成交量确认
-            volume_confirm = breakout_row['rel_volume'] >= self.VOLUME_THRESHOLD
+            volume_confirm = self._to_float(breakout_row['rel_volume']) >= self.VOLUME_THRESHOLD
             
             # 检查RSI
-            rsi_value = breakout_row['rsi']
+            rsi_value = self._to_float(breakout_row['rsi'])
             rsi_ok = self.RSI_MIN <= rsi_value <= self.RSI_MAX
             
             # 计算信号强度
@@ -148,9 +155,9 @@ class BreakoutScanner:
         
         if len(breakout_indices) == 0:
             return None
-        
+
         # 返回相对位置
-        return df.index.get_loc(breakout_indices[0])
+        return int(df.index.get_loc(breakout_indices[0]))
     
     def _check_pullback(self, df: pd.DataFrame, left_high: float) -> bool:
         """检查是否有回测入场机会.
@@ -168,7 +175,7 @@ class BreakoutScanner:
                 return False
             
             # 检查最近收盘价是否在突破位附近
-            current_price = recent['close'].iloc[-1]
+            current_price = self._to_float(recent['close'].iloc[-1])
             
             # 在突破位±3%范围内
             if abs(current_price - left_high) / left_high <= 0.03:
@@ -230,10 +237,10 @@ class BreakoutScanner:
                 return None
             
             # IPO初期价格（前5天平均）
-            ipo_price = df.head(5)['close'].mean()
+            ipo_price = self._to_float(df.head(5)['close'].mean())
             
             # 当前价格
-            current_price = df.iloc[breakout_idx]['close']
+            current_price = self._to_float(df.iloc[breakout_idx]['close'])
             
             if ipo_price > 0:
                 # 计算相对表现（相对于IPO的涨幅）
@@ -241,7 +248,7 @@ class BreakoutScanner:
                 
                 # 转换为0-100的评级（假设-20%到+100%映射到0-100）
                 rs = 50 + (performance * 100)
-                return max(0, min(100, rs * 50))  # 归一化
+                return float(max(0, min(100, rs * 50)))  # 归一化
             
             return None
             
@@ -261,13 +268,13 @@ class BreakoutScanner:
         try:
             # 找到底部期间的最低点
             if base_info.base_start and base_info.base_end:
-                base_low = df[
+                base_low = self._to_float(df[
                     (df['date'] >= pd.Timestamp(base_info.base_start)) &
                     (df['date'] <= pd.Timestamp(base_info.base_end))
-                ]['low'].min()
+                ]['low'].min())
             else:
                 # 使用左侧高点后的最低点
-                base_low = df.tail(20)['low'].min()
+                base_low = self._to_float(df.tail(20)['low'].min())
             
             # 设在低点下方7%
             stop = base_low * 0.93
@@ -275,7 +282,7 @@ class BreakoutScanner:
             # 确保止损不超过突破价的10%
             max_stop = breakout_price * 0.90
             
-            return min(stop, max_stop)
+            return float(min(stop, max_stop))
             
         except Exception:
             return None
@@ -284,12 +291,12 @@ class BreakoutScanner:
 class PatternRecognizer:
     """形态识别器 - 整合检测和扫描."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化."""
         self.base_detector = IPOBaseDetector()
         self.breakout_scanner = BreakoutScanner()
     
-    def analyze(self, df: pd.DataFrame, ipo_date: date) -> dict:
+    def analyze(self, df: pd.DataFrame, ipo_date: date) -> dict[str, object]:
         """综合分析.
         
         Args:

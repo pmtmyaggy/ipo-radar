@@ -10,10 +10,11 @@
 
 import json
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from datetime import date, datetime, timedelta
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 from urllib.parse import urlencode
 
 import requests
@@ -66,9 +67,9 @@ class EdgarMonitor(BaseCrawler):
     
     def __init__(
         self,
-        db_manager=None,
+        db_manager: Any = None,
         poll_interval: int = 60,
-    ):
+    ) -> None:
         """初始化EDGAR监控器.
         
         Args:
@@ -85,6 +86,7 @@ class EdgarMonitor(BaseCrawler):
         self._observers: list[EdgarObserver] = []
         self._last_check: Optional[datetime] = None
         self._running = False
+        self._running_lock = threading.Lock()
     
     def register_observer(self, observer: EdgarObserver) -> None:
         """注册观察者.
@@ -108,7 +110,7 @@ class EdgarMonitor(BaseCrawler):
             except Exception as e:
                 logger.error(f"Observer {observer} failed to handle S-1: {e}")
     
-    def _notify_424b4(self, filing: dict) -> None:
+    def _notify_424b4(self, filing: dict[str, Any]) -> None:
         """通知所有观察者新的424B4文件."""
         for observer in self._observers:
             try:
@@ -116,7 +118,7 @@ class EdgarMonitor(BaseCrawler):
             except Exception as e:
                 logger.error(f"Observer {observer} failed to handle 424B4: {e}")
     
-    def fetch(self, **kwargs) -> list[dict]:
+    def fetch(self, **kwargs: Any) -> list[dict[str, Any]]:
         """获取新提交的文件.
         
         Args:
@@ -132,7 +134,7 @@ class EdgarMonitor(BaseCrawler):
         end_date = kwargs.get("end_date", date.today())
         form_types = kwargs.get("form_types", self.MONITORED_FORMS)
         
-        all_filings = []
+        all_filings: list[dict[str, Any]] = []
         
         for form_type in form_types:
             filings = self._search_filings(form_type, start_date, end_date)
@@ -145,7 +147,7 @@ class EdgarMonitor(BaseCrawler):
         form_type: str,
         start_date: date,
         end_date: date,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """搜索特定类型的文件.
         
         Args:
@@ -181,7 +183,7 @@ class EdgarMonitor(BaseCrawler):
             logger.error(f"Failed to search {form_type} filings: {e}")
             return []
     
-    def _parse_search_results(self, data: dict, form_type: str) -> list[dict]:
+    def _parse_search_results(self, data: dict[str, Any], form_type: str) -> list[dict[str, Any]]:
         """解析搜索响应.
         
         Args:
@@ -191,7 +193,7 @@ class EdgarMonitor(BaseCrawler):
         Returns:
             文件信息列表
         """
-        filings = []
+        filings: list[dict[str, Any]] = []
         
         try:
             hits = data.get("hits", {}).get("hits", [])
@@ -216,7 +218,7 @@ class EdgarMonitor(BaseCrawler):
             logger.error(f"Error parsing search results: {e}")
             return []
     
-    def _build_filing_url(self, source: dict) -> str:
+    def _build_filing_url(self, source: dict[str, Any]) -> str:
         """构建文件URL.
         
         Args:
@@ -240,7 +242,10 @@ class EdgarMonitor(BaseCrawler):
         
         return url
     
-    def poll(self, callback: Optional[Callable] = None) -> list[dict]:
+    def poll(
+        self,
+        callback: Callable[[list[dict[str, Any]]], None] | None = None,
+    ) -> list[dict[str, Any]]:
         """执行一次轮询.
         
         检查自上次轮询以来的新文件。
@@ -288,7 +293,10 @@ class EdgarMonitor(BaseCrawler):
         
         return new_filings
     
-    def start_monitoring(self, callback: Optional[Callable] = None) -> None:
+    def start_monitoring(
+        self,
+        callback: Callable[[list[dict[str, Any]]], None] | None = None,
+    ) -> None:
         """开始持续监控.
         
         警告：此方法会阻塞当前线程！
@@ -297,10 +305,14 @@ class EdgarMonitor(BaseCrawler):
         Args:
             callback: 每次轮询后的回调函数
         """
-        self._running = True
+        with self._running_lock:
+            self._running = True
         logger.info(f"Starting EDGAR monitoring (interval: {self.poll_interval}s)")
         
-        while self._running:
+        while True:
+            with self._running_lock:
+                if not self._running:
+                    break
             try:
                 self.poll(callback)
             except Exception as e:
@@ -311,7 +323,8 @@ class EdgarMonitor(BaseCrawler):
     
     def stop_monitoring(self) -> None:
         """停止监控."""
-        self._running = False
+        with self._running_lock:
+            self._running = False
         logger.info("Stopping EDGAR monitoring")
     
     def get_s1_filings(
@@ -355,7 +368,7 @@ class S1FilingHandler(EdgarObserver):
     当新的S-1文件提交时，自动下载并解析。
     """
     
-    def __init__(self, s1_parser=None):
+    def __init__(self, s1_parser: Any = None) -> None:
         """初始化处理器.
         
         Args:
@@ -387,7 +400,7 @@ class EdgarIPOCrawler(BaseCrawler):
     从EDGAR获取IPO相关信息，作为Nasdaq的备用/补充。
     """
     
-    def __init__(self, db_manager=None):
+    def __init__(self, db_manager: Any = None) -> None:
         """初始化."""
         super().__init__(
             name="edgar_ipo",
@@ -396,7 +409,7 @@ class EdgarIPOCrawler(BaseCrawler):
         )
         self.monitor = EdgarMonitor(db_manager)
     
-    def fetch(self, **kwargs) -> list[IPOEvent]:
+    def fetch(self, **kwargs: Any) -> list[IPOEvent]:
         """从EDGAR获取IPO事件.
         
         通过查询S-1文件获取即将上市的IPO。
@@ -407,7 +420,7 @@ class EdgarIPOCrawler(BaseCrawler):
         s1_filings = self.monitor.get_s1_filings(days=days)
         
         # 转换为IPOEvent（部分信息需要从S-1解析获取）
-        events = []
+        events: list[IPOEvent] = []
         for filing in s1_filings:
             event = self._filing_to_event(filing)
             if event:

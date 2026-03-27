@@ -89,6 +89,15 @@ class TestDockerBuild:
     @pytest.fixture(scope="class")
     def docker_image(self):
         """构建Docker镜像."""
+        version_result = subprocess.run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            capture_output=True,
+            text=True,
+        )
+
+        if version_result.returncode != 0:
+            pytest.skip("Docker daemon not running")
+
         result = subprocess.run(
             ["docker", "build", "-t", "ipo-radar:test", "."],
             capture_output=True,
@@ -168,6 +177,15 @@ class TestDockerRuntime:
     @pytest.fixture(scope="class")
     def running_container(self):
         """启动测试容器."""
+        version_result = subprocess.run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            capture_output=True,
+            text=True,
+        )
+
+        if version_result.returncode != 0:
+            pytest.skip("Docker daemon not running")
+
         # 启动容器
         container_id = subprocess.run(
             ["docker", "run", "-d", "--name", "ipo-radar-test", 

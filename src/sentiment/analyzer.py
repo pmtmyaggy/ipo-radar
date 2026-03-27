@@ -9,9 +9,7 @@
 import json
 import logging
 import os
-import re
-from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional, TypedDict, cast
 
 from src.crawler.api import CrawlerAPI
 
@@ -40,7 +38,7 @@ class LLMClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-    ):
+    ) -> None:
         """初始化 LLM 客户端.
         
         Args:
@@ -50,7 +48,7 @@ class LLMClient:
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.model: str = model or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
         self.client = None
         
         if self.api_key:
@@ -70,7 +68,7 @@ class LLMClient:
         """检查 LLM 是否可用."""
         return self.client is not None
     
-    def analyze_sentiment(self, text: str) -> dict:
+    def analyze_sentiment(self, text: str) -> dict[str, str | float]:
         """使用 LLM 分析情绪.
         
         Args:
@@ -110,7 +108,7 @@ Rules:
             
             # 处理不同的响应格式
             if hasattr(response, 'choices') and response.choices:
-                content = response.choices[0].message.content.strip()
+                content = (response.choices[0].message.content or "").strip()
             elif isinstance(response, dict):
                 content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
             elif isinstance(response, str):
@@ -140,6 +138,22 @@ Rules:
             return {"sentiment": "neutral", "score": 0.0, "reasoning": f"Error: {str(e)[:50]}"}
 
 
+class SentimentAnalysisResult(TypedDict, total=False):
+    """情绪分析结果字典."""
+
+    ticker: str
+    score: float
+    sentiment: str
+    positive_count: int
+    negative_count: int
+    neutral_count: int
+    buzz: str
+    total_count: int
+    method: str
+    sample_reasoning: str
+    change: float
+
+
 class SentimentAnalyzer:
     """情绪分析器 - 支持关键词和 LLM 两种分析方式."""
     
@@ -148,7 +162,7 @@ class SentimentAnalyzer:
         crawler: Optional[CrawlerAPI] = None,
         use_llm: bool = True,
         use_ollama: bool = False,
-    ):
+    ) -> None:
         """初始化.
         
         Args:
@@ -169,7 +183,7 @@ class SentimentAnalyzer:
         else:
             self.logger.info("Using keyword-based sentiment analysis")
     
-    def analyze(self, ticker: str, days: int = 7) -> dict:
+    def analyze(self, ticker: str, days: int = 7) -> SentimentAnalysisResult:
         """分析情绪.
         
         Args:
@@ -192,8 +206,8 @@ class SentimentAnalyzer:
             }
         
         # 分析每条新闻
-        scores = []
-        llm_results = []
+        scores: list[float] = []
+        llm_results: list[dict[str, str | float]] = []
         
         for item in news:
             text = item.title + " " + (item.snippet or "")
@@ -201,7 +215,7 @@ class SentimentAnalyzer:
             # 优先使用 LLM 分析
             if self.llm_client and self.llm_client.is_available():
                 llm_result = self.llm_client.analyze_sentiment(text)
-                scores.append(llm_result["score"])
+                scores.append(float(llm_result["score"]))
                 llm_results.append(llm_result)
             else:
                 # 使用关键词分析
@@ -233,7 +247,7 @@ class SentimentAnalyzer:
         else:
             buzz = "low"
         
-        result = {
+        result: SentimentAnalysisResult = {
             "ticker": ticker,
             "score": round(avg_score, 2),
             "sentiment": sentiment,
@@ -247,7 +261,7 @@ class SentimentAnalyzer:
         
         # 如果有 LLM 分析，添加推理信息
         if llm_results:
-            result["sample_reasoning"] = llm_results[0].get("reasoning", "")
+            result["sample_reasoning"] = str(llm_results[0].get("reasoning", ""))
         
         return result
     
@@ -267,11 +281,11 @@ class SentimentAnalyzer:
 class SentimentTracker:
     """情绪追踪器 - 追踪情绪变化趋势."""
     
-    def __init__(self, analyzer: Optional[SentimentAnalyzer] = None):
+    def __init__(self, analyzer: Optional[SentimentAnalyzer] = None) -> None:
         self.analyzer = analyzer or SentimentAnalyzer()
-        self.history = {}
+        self.history: dict[str, SentimentAnalysisResult] = {}
     
-    def track(self, ticker: str) -> dict:
+    def track(self, ticker: str) -> SentimentAnalysisResult:
         """追踪情绪."""
         current = self.analyzer.analyze(ticker, days=7)
         

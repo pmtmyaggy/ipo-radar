@@ -478,7 +478,7 @@ cache_manager.clear_all()
 jobs:
   - name: "daily_scan"
     schedule: "0 9 * * *"      # 每天早上 9 点
-    command: "python -m src.scorer.daily_scan"
+    command: "python -m src.scorer --scan"
     
   - name: "update_prices"
     schedule: "*/15 * * * *"   # 每 15 分钟

@@ -2,10 +2,11 @@
 
 import logging
 from datetime import date, timedelta
-from typing import Optional
+from typing import Any, Optional, cast
 
 from src.crawler.api import CrawlerAPI
 from src.crawler.models.schemas import GuidanceType
+from src.crawler.earnings_fetcher import UpcomingEarningsItem
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,9 @@ class EarningsTracker:
         """获取下次财报日期."""
         return self.crawler.get_next_earnings_date(ticker)
     
-    def get_upcoming_earnings(self, tickers: list[str], days_ahead: int = 30) -> list[dict]:
+    def get_upcoming_earnings(
+        self, tickers: list[str], days_ahead: int = 30
+    ) -> list[UpcomingEarningsItem]:
         """获取即将发布的财报."""
         return self.crawler.get_upcoming_earnings(tickers, days_ahead)
     
@@ -94,11 +97,17 @@ class EarningsCalendar:
     def __init__(self, tracker: EarningsTracker):
         self.tracker = tracker
     
-    def get_first_time_reports(self, tickers: list[str], days_ahead: int = 30) -> list[dict]:
+    def get_first_time_reports(
+        self, tickers: list[str], days_ahead: int = 30
+    ) -> list[dict[str, Any]]:
         """获取首次财报."""
         upcoming = self.tracker.get_upcoming_earnings(tickers, days_ahead)
         
         # 过滤首次财报
-        first_reports = [e for e in upcoming if e.get("is_first_report", False)]
+        first_reports = [
+            dict(e)
+            for e in upcoming
+            if cast(Any, e).get("is_first_report", False)
+        ]
         
         return first_reports

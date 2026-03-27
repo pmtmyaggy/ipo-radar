@@ -1,0 +1,129 @@
+{
+  "scanned_at": "2026-03-27T22:50:00.269012",
+  "total_count": 5,
+  "summary": {
+    "strong_opportunity": 0,
+    "opportunity": 0,
+    "watch": 0,
+    "no_action": 5,
+    "errors": 0
+  },
+  "reports": [
+    {
+      "ticker": "HIFI",
+      "company_name": null,
+      "ipo_date": null,
+      "days_since_ipo": null,
+      "current_price": null,
+      "price_vs_ipo": null,
+      "fundamental_score": 0,
+      "overall_signal": "NO_ACTION",
+      "signal_reasons": [
+        "暂无明显信号"
+      ],
+      "risk_factors": [
+        "基本面评分较低"
+      ],
+      "windows": {
+        "base_detected": false,
+        "breakout_signal": null,
+        "lockup_days_until": null,
+        "supply_impact_pct": null,
+        "earnings_days_until": null
+      }
+    },
+    {
+      "ticker": "SEAH",
+      "company_name": null,
+      "ipo_date": null,
+      "days_since_ipo": null,
+      "current_price": null,
+      "price_vs_ipo": null,
+      "fundamental_score": 0,
+      "overall_signal": "NO_ACTION",
+      "signal_reasons": [
+        "暂无明显信号"
+      ],
+      "risk_factors": [
+        "基本面评分较低"
+      ],
+      "windows": {
+        "base_detected": false,
+        "breakout_signal": null,
+        "lockup_days_until": null,
+        "supply_impact_pct": null,
+        "earnings_days_until": null
+      }
+    },
+    {
+      "ticker": "HMH",
+      "company_name": null,
+      "ipo_date": null,
+      "days_since_ipo": null,
+      "current_price": null,
+      "price_vs_ipo": null,
+      "fundamental_score": 0,
+      "overall_signal": "NO_ACTION",
+      "signal_reasons": [
+        "暂无明显信号"
+      ],
+      "risk_factors": [
+        "基本面评分较低"
+      ],
+      "windows": {
+        "base_detected": false,
+        "breakout_signal": null,
+        "lockup_days_until": null,
+        "supply_impact_pct": null,
+        "earnings_days_until": null
+      }
+    },
+    {
+      "ticker": "BWGC",
+      "company_name": null,
+      "ipo_date": null,
+      "days_since_ipo": null,
+      "current_price": null,
+      "price_vs_ipo": null,
+      "fundamental_score": 0,
+      "overall_signal": "NO_ACTION",
+      "signal_reasons": [
+        "暂无明显信号"
+      ],
+      "risk_factors": [
+        "基本面评分较低"
+      ],
+      "windows": {
+        "base_detected": false,
+        "breakout_signal": null,
+        "lockup_days_until": null,
+        "supply_impact_pct": null,
+        "earnings_days_until": null
+      }
+    },
+    {
+      "ticker": "DTDT",
+      "company_name": null,
+      "ipo_date": null,
+      "days_since_ipo": null,
+      "current_price": null,
+      "price_vs_ipo": null,
+      "fundamental_score": 0,
+      "overall_signal": "NO_ACTION",
+      "signal_reasons": [
+        "暂无明显信号"
+      ],
+      "risk_factors": [
+        "基本面评分较低"
+      ],
+      "windows": {
+        "base_detected": false,
+        "breakout_signal": null,
+        "lockup_days_until": null,
+        "supply_impact_pct": null,
+        "earnings_days_until": null
+      }
+    }
+  ],
+  "errors": []
+}

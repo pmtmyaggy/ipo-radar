@@ -12,9 +12,10 @@ from datetime import datetime
 
 from src.scorer.composite import SignalAggregator
 from src.scorer.daily_scan import DailyScanner
+from src.crawler.models.schemas import CompositeReport
 
 
-def format_report(report) -> str:
+def format_report(report: CompositeReport) -> str:
     """格式化报告为可读文本."""
     lines = [
         f"\n{'='*60}",
@@ -108,7 +109,7 @@ def format_report(report) -> str:
     return "\n".join(lines)
 
 
-def main():
+def main() -> int:
     """主函数."""
     parser = argparse.ArgumentParser(
         description="IPO-Radar 综合评分工具",
@@ -144,6 +145,11 @@ def main():
         nargs="+",
         help="指定扫描的股票列表",
     )
+    parser.add_argument(
+        "--watchlist",
+        action="store_true",
+        help="扫描手动观察名单，而不是自动发现的 IPO universe",
+    )
     
     args = parser.parse_args()
     
@@ -165,7 +171,8 @@ def main():
         scanner = DailyScanner()
         
         tickers = args.tickers if args.tickers else None
-        result = scanner.run_scan(tickers)
+        scan_mode = "watchlist" if args.watchlist and not tickers else "discovery"
+        result = scanner.run_scan(tickers=tickers, mode=scan_mode)
         
         # 打印摘要
         print(scanner.generate_summary_text(result))

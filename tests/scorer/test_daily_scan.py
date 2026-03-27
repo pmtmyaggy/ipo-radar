@@ -76,12 +76,52 @@ class TestDailyScanner:
         assert mock_aggregator.generate_report.call_count == 2
 
     def test_run_scan_with_watchlist(self, scanner, mock_aggregator, mock_radar):
-        """测试使用观察名单扫描."""
-        result = scanner.run_scan()  # 不传tickers，使用观察名单
+        """测试显式使用观察名单扫描."""
+        result = scanner.run_scan(mode="watchlist")
         
         assert result.total_count == 3
         assert len(result.reports) == 3
         mock_radar.get_active_tickers.assert_called_once()
+
+    def test_run_scan_uses_discovery_universe_by_default(self, scanner):
+        """测试默认扫描自动发现的 IPO universe."""
+        scanner.aggregator.crawler.get_upcoming_ipos.return_value = [
+            Mock(ticker="CAVA"),
+            Mock(ticker="FMACU"),
+        ]
+        scanner.aggregator.crawler.get_recent_ipos.return_value = [
+            Mock(ticker="ARM"),
+            Mock(ticker="QADRU"),
+            Mock(ticker="CAVA"),
+        ]
+
+        result = scanner.run_scan()
+
+        assert result.total_count == 2
+        assert [report["ticker"] for report in result.reports] == ["CAVA", "ARM"]
+        scanner.radar.get_active_tickers.assert_not_called()
+
+    def test_run_scan_uses_secondary_source_when_primary_only_has_unscannable_events(self, scanner):
+        """测试主源只有不可扫描标的时回退到备用源."""
+        scanner.aggregator.crawler.get_upcoming_ipos.return_value = [
+            Mock(ticker="FMACU", company_name="Future Money Acquisition Corp"),
+        ]
+        scanner.aggregator.crawler.get_recent_ipos.return_value = [
+            Mock(ticker="QADRU", company_name="QDRO Acquisition Corp."),
+        ]
+
+        mock_ipo_calendar = Mock()
+        mock_ipo_calendar.iposcoop.fetch.return_value = [
+            Mock(ticker="HIFI", company_name="Hillhouse Frontier Holdings"),
+            Mock(ticker="TMCR", company_name="Metals Royalty Co. (The)(NASDAQ Direct Listing)"),
+            Mock(ticker="SEAH", company_name="Seahawk Recycling Holdings, Inc."),
+        ]
+        scanner.aggregator.crawler._ipo_calendar = mock_ipo_calendar
+
+        result = scanner.run_scan()
+
+        assert result.total_count == 2
+        assert [report["ticker"] for report in result.reports] == ["HIFI", "SEAH"]
 
     def test_run_scan_signal_counting(self, scanner):
         """测试信号计数."""

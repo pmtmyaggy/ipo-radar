@@ -6,11 +6,13 @@
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Optional, List
+from decimal import Decimal
+from typing import Any, Optional, List, TypedDict, cast
 
 from src.radar.monitor import IPORadar
 from src.screener.fundamentals import FundamentalScreener
 from src.pattern.breakout_scanner import BreakoutScanner, PatternRecognizer
+from src.pattern.ipo_base_detector import IPOBase as DetectedIPOBase
 from src.lockup.tracker import LockupTracker
 from src.sentiment.analyzer import SentimentAnalyzer
 from src.earnings.tracker import EarningsTracker
@@ -20,14 +22,26 @@ from src.crawler.models.schemas import (
     CompositeReport,
     WindowsStatus,
     FirstDayPullbackWindow,
+    IPOBase as SchemaIPOBase,
     IPOBaseBreakoutWindow,
     LockupExpiryWindow,
     FirstEarningsWindow,
     SentimentResult,
+    SentimentType,
     LockupStatus,
+    PatternType,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class IPOInfo(TypedDict, total=False):
+    """IPO 基础信息."""
+
+    ticker: str
+    company_name: str
+    ipo_date: date
+    ipo_price: Decimal | None
 
 
 @dataclass
@@ -102,7 +116,10 @@ class SignalAggregator:
             ipo_info = self._get_ipo_info(ticker)
             
             # 获取当前价格
-            current_price = self.crawler.get_latest_price(ticker)
+            current_price_raw = self.crawler.get_latest_price(ticker)
+            current_price = (
+                Decimal(str(current_price_raw)) if current_price_raw is not None else None
+            )
             ipo_price = ipo_info.get("ipo_price") if ipo_info else None
             price_vs_ipo = current_price / ipo_price if current_price and ipo_price else None
             
@@ -151,7 +168,7 @@ class SignalAggregator:
                 signal_reasons=[f"Error generating report: {e}"],
             )
     
-    def _get_ipo_info(self, ticker: str) -> Optional[dict]:
+    def _get_ipo_info(self, ticker: str) -> Optional[IPOInfo]:
         """获取IPO信息."""
         try:
             # 1. 先从radar获取
@@ -186,12 +203,15 @@ class SignalAggregator:
                         except:
                             ipo_date = row[2]
                     
-                    return {
+                    return cast(
+                        IPOInfo,
+                        {
                         "ticker": row[0],
                         "company_name": row[1],
                         "ipo_date": ipo_date,
-                        "ipo_price": float(row[3]) if row[3] else None,
-                    }
+                        "ipo_price": Decimal(str(row[3])) if row[3] is not None else None,
+                        },
+                    )
             except Exception as db_err:
                 logger.warning(f"Failed to get IPO info from database: {db_err}")
             
@@ -199,13 +219,13 @@ class SignalAggregator:
         except Exception:
             return None
     
-    def _calculate_days_since_ipo(self, ipo_info: Optional[dict]) -> Optional[int]:
+    def _calculate_days_since_ipo(self, ipo_info: Optional[IPOInfo]) -> Optional[int]:
         """计算上市天数."""
         if ipo_info and ipo_info.get("ipo_date"):
             return (date.today() - ipo_info["ipo_date"]).days
         return None
     
-    def _evaluate_windows(self, ticker: str, ipo_info: Optional[dict]) -> WindowsStatus:
+    def _evaluate_windows(self, ticker: str, ipo_info: Optional[IPOInfo]) -> WindowsStatus:
         """评估四个窗口状态."""
         windows = WindowsStatus()
         
@@ -223,7 +243,9 @@ class SignalAggregator:
         
         return windows
     
-    def _evaluate_first_day_pullback(self, ticker: str, ipo_info: Optional[dict]) -> FirstDayPullbackWindow:
+    def _evaluate_first_day_pullback(
+        self, ticker: str, ipo_info: Optional[IPOInfo]
+    ) -> FirstDayPullbackWindow:
         """评估首日回调窗口."""
         window = FirstDayPullbackWindow(active=False)
         
@@ -241,14 +263,18 @@ class SignalAggregator:
             ipo_price = ipo_info.get("ipo_price")
             
             if current_price and ipo_price:
-                if current_price < ipo_price * 0.95:  # 破发5%以上
+                current_price_decimal = Decimal(str(current_price))
+                ipo_price_decimal = Decimal(str(ipo_price))
+                if current_price_decimal < ipo_price_decimal * Decimal("0.95"):  # 破发5%以上
                     window.signal = "pullback"
-                elif current_price > ipo_price:  # 回到发行价之上
+                elif current_price_decimal > ipo_price_decimal:  # 回到发行价之上
                     window.signal = "bounce"
         
         return window
     
-    def _evaluate_base_breakout(self, ticker: str, ipo_info: Optional[dict]) -> IPOBaseBreakoutWindow:
+    def _evaluate_base_breakout(
+        self, ticker: str, ipo_info: Optional[IPOInfo]
+    ) -> IPOBaseBreakoutWindow:
         """评估IPO底部突破窗口."""
         window = IPOBaseBreakoutWindow(active=False, base_detected=False)
         
@@ -278,7 +304,7 @@ class SignalAggregator:
             
             if base.has_base:
                 window.active = True
-                window.base_details = base
+                window.base_details = self._convert_base_details(base)
                 
                 # 检测突破
                 breakout = self.pattern.breakout_scanner.scan(df, base)
@@ -328,7 +354,9 @@ class SignalAggregator:
             self.logger.warning(f"Error evaluating lockup for {ticker}: {e}")
             return window
     
-    def _evaluate_first_earnings(self, ticker: str, ipo_info: Optional[dict]) -> FirstEarningsWindow:
+    def _evaluate_first_earnings(
+        self, ticker: str, ipo_info: Optional[IPOInfo]
+    ) -> FirstEarningsWindow:
         """评估首次财报窗口."""
         window = FirstEarningsWindow(active=False)
         
@@ -368,11 +396,33 @@ class SignalAggregator:
             result = self.sentiment.analyze(ticker, days=7)
             return SentimentResult(
                 ticker=ticker,
-                overall_score=result.get("score", 0.0),
-                buzz=result.get("buzz", "low"),
+                overall_score=Decimal(str(result.get("score", 0.0))),
+                buzz_level=str(result.get("buzz", "low")),
+                sentiment=SentimentType(str(result.get("sentiment", "neutral"))),
+                positive_count=int(result.get("positive_count", 0)),
+                negative_count=int(result.get("negative_count", 0)),
+                neutral_count=int(result.get("neutral_count", 0)),
+                total_count=int(result.get("total_count", 0)),
             )
         except Exception:
-            return SentimentResult(ticker=ticker, overall_score=0.0)
+            return SentimentResult(ticker=ticker, overall_score=Decimal("0"))
+
+    def _convert_base_details(self, base: DetectedIPOBase) -> SchemaIPOBase:
+        """将 pattern 模块的 dataclass 转换为 schema 模型."""
+        return SchemaIPOBase(
+            ticker=base.ticker,
+            has_base=base.has_base,
+            base_type=PatternType(str(base.base_type)),
+            base_start=base.base_start,
+            base_end=base.base_end,
+            base_depth_pct=(
+                Decimal(str(base.base_depth_pct)) if base.base_depth_pct is not None else None
+            ),
+            base_length_days=base.base_length_days,
+            left_high=Decimal(str(base.left_high)) if base.left_high is not None else None,
+            tightness=Decimal(str(base.tightness)) if base.tightness is not None else None,
+            volume_dry_up=base.volume_dry_up,
+        )
     
     def _determine_overall_signal(
         self,
