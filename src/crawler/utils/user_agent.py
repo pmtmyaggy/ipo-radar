@@ -54,9 +54,12 @@ class UserAgentManager:
         # 会让大量与 EDGAR 无关的功能在构造时直接失败。
         env_ua = os.getenv("EDGAR_USER_AGENT", "")
         env_email = os.getenv("CONTACT_EMAIL", "")
+        env_identity = os.getenv("EDGAR_IDENTITY", "")
         self._using_fallback_contact = False
 
-        if env_ua and "@" in env_ua:
+        if env_identity and "@" in env_identity:
+            self.contact_email = env_identity
+        elif env_ua and "@" in env_ua:
             self.contact_email = env_ua.split()[-1] if "@" in env_ua.split()[-1] else env_ua
         elif env_email and "@" in env_email:
             self.contact_email = env_email

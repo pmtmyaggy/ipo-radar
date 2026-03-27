@@ -95,8 +95,8 @@ cp .env.example .env
 编辑 `.env` 文件，填入必要的配置：
 
 ```bash
-# 必填：联系邮箱（用于SEC EDGAR访问）
-EDGAR_USER_AGENT="IPO-Radar your-email@example.com"
+# 必填：身份信息（用于SEC EDGAR访问，格式：姓名 邮箱）
+EDGAR_IDENTITY="YourName your-email@example.com"
 
 # 可选：数据库配置（默认SQLite）
 DATABASE_URL=sqlite:///data/ipo_radar.db

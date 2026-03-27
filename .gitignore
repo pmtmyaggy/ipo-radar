@@ -134,8 +134,12 @@ Desktop.ini
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/*.json
 data/cached/
 !data/.gitkeep
+
+# Scan reports
+scan_report_*.json
 
 # Logs
 logs/

@@ -3,8 +3,13 @@
 提供可视化界面展示所有分析结果。
 """
 
+import sys
+import os
 from datetime import date, timedelta
 from typing import cast
+
+# 确保项目根目录在 Python 路径中
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import pandas as pd
 import plotly.graph_objects as go

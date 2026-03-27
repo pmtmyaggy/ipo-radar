@@ -5,11 +5,16 @@
 
 import json
 import logging
+import os
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
+
+# 确保项目根目录在 Python 路径中
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from src.crawler.models.schemas import CompositeReport, IPOEvent
 from src.radar.monitor import IPORadar
